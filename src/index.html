@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <!-- APP_HEAD -->
+    <!-- VERSION_META -->
+    <title>Glintile · 点灯匣</title>
+    <!-- APP_STYLE -->
+  </head>
+  <body>
+    <header>
+      <div class="brand" role="img" aria-label="Glintile · 点灯匣">
+        <img
+          class="brand-icon"
+          src="<!-- BRAND_ICON -->"
+          width="56"
+          height="56"
+          alt=""
+          aria-hidden="true"
+        />
+        <div class="brand-line" aria-hidden="true">
+          <svg
+            class="brand-wordmark"
+            viewBox="0 0 136 32"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            focusable="false"
+          >
+            <path
+              d="M24 9.5C21.8 5.8 18.2 4 14 4C7.4 4 2 9.4 2 16C2 22.6 7.4 28 14 28C18.4 28 22 26 24 22.8V16H15"
+            />
+            <path
+              d="M34 4V24Q34 28 38 28M46 13V28M56 28V13M56 18C56 10 69 10 69 19V28M79 7V24Q79 28 83 28H85M74 13H85M93 13V28M103 4V24Q103 28 107 28M116 21H133C133 15.6 129.6 12 124.5 12C119.1 12 115 15.7 115 21C115 26.3 119.1 29 124.5 29C128 29 130.6 27.7 132.5 25.8"
+            />
+            <g class="brand-lights" stroke="none">
+              <circle cx="46" cy="6" r="1.8" />
+              <circle cx="93" cy="6" r="1.8" />
+            </g>
+          </svg>
+          <svg
+            class="chinese-name"
+            viewBox="0 0 136 26"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            focusable="false"
+          >
+            <g data-character="点" transform="translate(10 0)">
+              <path d="M12 2V10M12 5H20M5 10H20V17H5Z" />
+              <g class="brand-embers" fill="currentColor" stroke="none">
+                <circle cx="3.5" cy="23" r="1.3" />
+                <circle cx="9.5" cy="23" r="1.3" />
+                <circle cx="15.5" cy="23" r="1.3" />
+                <circle class="brand-ember-lit" cx="21.5" cy="23" r="1.3" />
+              </g>
+            </g>
+            <g data-character="灯" transform="translate(56 0)">
+              <path
+                d="M2 8L3.5 12M10 7L7.5 11M6 3V12C6 17 4.5 20 1.5 23M6 15L10 21M12 5H24M19 5V21C19 23 17.5 23 15 22"
+              />
+            </g>
+            <g data-character="匣" transform="translate(101 0)">
+              <path d="M23 3H3V23H23M8 7H20V17H8ZM8 12H20M14 7V22" />
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="header-tools" role="group" aria-label="作品操作">
+        <button
+          id="headerExport"
+          class="keep-button"
+          aria-label="保存作品"
+          title="保存作品"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 3h12l4 4v14H3V3zM7 3v7h10V3M7 21v-7h10v7" />
+          </svg>
+        </button>
+        <button
+          id="headerShare"
+          class="keep-button"
+          aria-label="分享点灯匣网页"
+          title="分享点灯匣网页"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M9 5H6a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h11a3 3 0 0 0 3-3v-3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M7 16C7.8 9.6 11.8 6 17 6V2.5L23 8.5L17 14.5V11C12.5 11 9.7 12.7 7 16Z"
+              fill="currentColor"
+              stroke="none"
+            />
+          </svg>
+        </button>
+        <!-- HEADER_FEEDBACK -->
+      </div>
+      <div class="header-actions">
+        <button id="importProject">打开作品</button
+        ><button id="exportJson">保存 JSON</button
+        ><button id="exportPng">导出 PNG</button>
+      </div>
+    </header>
+    <div class="notice" id="restoreNotice" hidden>
+      <span>发现上次的本机暂存，要接着画吗？参考图需重新选择。</span>
+      <div>
+        <button id="restore">继续上次</button
+        ><button id="exportPrevious" aria-label="保存上次暂存为 JSON">
+          备份 JSON</button
+        ><button id="discard" aria-label="用当前作品替换暂存">用当前</button>
+      </div>
+    </div>
+    <div class="shell">
+      <main class="workspace">
+        <div class="toolbar" aria-label="画布工具">
+          <select id="viewMode" aria-label="参考模式">
+            <option value="side">上下对照</option>
+            <option value="horizontal">左右对照</option>
+            <option value="trace">描着画</option>
+            <option value="free">自由画</option>
+          </select>
+          <div class="separator"></div>
+          <div class="tools">
+            <button
+              class="tool"
+              data-tool="paint"
+              aria-pressed="true"
+              title="上色 B"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="m15 4 5 5M4 20l5-1L20 8a2 2 0 0 0-5-5L4 14zM4 14l5 5"
+                /></svg
+              >上色</button
+            ><button
+              class="tool"
+              data-tool="erase"
+              aria-pressed="false"
+              title="擦除 E"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m13 3 8 8-9 10H6l-4-5zM7 11l8 8M12 21h10" /></svg
+              >擦除</button
+            ><button
+              class="tool"
+              data-tool="pick"
+              aria-pressed="false"
+              title="吸色 I"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="m14 4 6 6M17 7l3-3M15 8 4 19l-1 3 3-1L17 10M12 6l6 6"
+                /></svg
+              >吸色</button
+            ><button
+              class="tool"
+              data-tool="pan"
+              aria-pressed="false"
+              title="移动 H"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4"
+                /></svg
+              >移动
+            </button>
+          </div>
+          <div class="separator"></div>
+          <button id="undo" aria-label="撤销" title="撤销 Ctrl / ⌘ Z">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 4 3 9l5 5M3 9h10a7 7 0 0 1 0 14" />
+            </svg></button
+          ><button id="redo" aria-label="重做" title="重做 Ctrl / ⌘ Shift Z">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m16 4 5 5-5 5m5-5H11a7 7 0 0 0 0 14" />
+            </svg></button
+          ><button id="zoomOut" aria-label="缩小">−</button
+          ><button id="zoomIn" aria-label="放大">＋</button
+          ><button id="fit">适合</button
+          ><label class="check"
+            ><input id="grid" type="checkbox" checked />格线</label
+          >
+        </div>
+        <div class="screen-controls">
+          <label for="screenDirection">屏幕方向</label
+          ><select id="screenDirection">
+            <option value="auto">跟随设备</option>
+            <option value="landscape">横屏</option>
+            <option value="portrait">竖屏</option></select
+          ><span id="orientationHint" role="status">布局随窗口自动适配</span>
+        </div>
+        <div class="viewspace" id="viewspace">
+          <section
+            class="reference-panel"
+            id="referencePanel"
+            aria-label="参考原图与取景框，可独立浏览"
+          >
+            <div class="ref-head">
+              <span>参考图 <small>原图浏览 · 不导出</small></span>
+              <div class="ref-tools">
+                <button id="refZoomOut" aria-label="缩小参考图">−</button
+                ><button
+                  id="refFit"
+                  aria-label="完整显示参考图和取景框，不改取景"
+                  title="完整显示参考图和取景框，不改取景"
+                >
+                  全图</button
+                ><button id="refZoomIn" aria-label="放大参考图">＋</button>
+              </div>
+            </div>
+            <div class="reference-viewport">
+              <canvas
+                id="referenceView"
+                tabindex="0"
+                aria-label="可独立拖动和缩放的参考图"
+              ></canvas
+              ><span id="refViewLabel" class="ref-view-label">100%</span>
+            </div>
+            <p class="ref-gesture-hint">
+              拖动／双指浏览原图，点“全图”看完整；虚线框是转图取景，可在底部“参考”调整
+            </p>
+          </section>
+          <div class="stage" id="stage">
+            <div class="stage-label" id="stageLabel">64 × 64 · 画布</div>
+            <canvas
+              id="viewport"
+              tabindex="0"
+              aria-label="可编辑 LED 点阵画布"
+            ></canvas
+            ><canvas id="loupe" aria-hidden="true"></canvas>
+            <div class="stage-hint" id="hint">
+              选一张本地图片，或直接开始画。滚轮缩放，双指移动。
+            </div>
+          </div>
+        </div>
+        <div class="statusbar">
+          <span id="status"></span
+          ><span id="saveStatus">图片仅在当前设备处理</span>
+        </div>
+      </main>
+      <aside class="sidebar" id="sidebar">
+        <section class="section" data-panel="reference">
+          <h2>调整参考取景</h2>
+          <button id="chooseImage" class="wide primary">选一张图片</button>
+          <div id="imageName" class="file-name">
+            PNG / JPEG / WebP，最多 25 MB
+          </div>
+          <div class="slider">
+            <label for="refScale">缩放</label
+            ><input
+              id="refScale"
+              type="range"
+              min="25"
+              max="300"
+              value="100"
+            /><output id="scaleValue">100%</output>
+          </div>
+          <div class="slider">
+            <label for="refX">横移</label
+            ><input
+              id="refX"
+              type="range"
+              min="-100"
+              max="100"
+              value="0"
+            /><output id="xValue">0%</output>
+          </div>
+          <div class="slider">
+            <label for="refY">纵移</label
+            ><input
+              id="refY"
+              type="range"
+              min="-100"
+              max="100"
+              value="0"
+            /><output id="yValue">0%</output>
+          </div>
+          <div class="slider">
+            <label for="refOpacity">底图</label
+            ><input
+              id="refOpacity"
+              aria-describedby="referenceControlsHelp"
+              type="range"
+              min="0"
+              max="100"
+              value="45"
+            /><output id="opacityValue">45%</output>
+          </div>
+          <div class="row equal">
+            <button id="resetReference" class="small">重置取景</button
+            ><button id="clearReference" class="small">移除参考</button>
+          </div>
+          <p class="tip" id="referenceControlsHelp">
+            缩放、横移、纵移调整转图和描绘取景，不改作品。虚线框按转图宽高显示，框外原图也可浏览。上方“全图”只恢复完整浏览；底图透明度仅在“描着画”生效。
+          </p>
+        </section>
+        <section class="section" data-panel="convert">
+          <h2>今天点亮什么？</h2>
+          <div id="examples" class="examples-strip" aria-label="内置示例"></div>
+          <p class="tip example-note">
+            每张作品独立撤销。切换前请保存 JSON；未保存改动会先询问。
+          </p>
+          <button id="mobileChooseImage" class="wide primary mobile-only">
+            选一张图片
+          </button>
+          <div class="row">
+            <label class="field"
+              >宽 / 格<input
+                id="gridWidth"
+                inputmode="numeric"
+                type="number"
+                min="8"
+                max="160"
+                value="64" /></label
+            ><span>×</span
+            ><label class="field"
+              >高 / 格<input
+                id="gridHeight"
+                inputmode="numeric"
+                type="number"
+                min="8"
+                max="160"
+                value="64" /></label
+            ><label class="field"
+              >最多颜色<select id="colorCount">
+                <option>8</option>
+                <option selected>16</option>
+                <option>24</option>
+                <option>32</option>
+                <option>48</option>
+              </select></label
+            >
+          </div>
+          <div class="row">
+            <label class="field"
+              >采样方式<select id="sampleMode">
+                <option value="auto" selected>自动 · 保留亮度</option>
+                <option value="smooth">普通图片 · 原版平均</option>
+                <option value="bright">LED 点图 · 保留亮点</option>
+                <option value="nearest">像素画 · 最近邻</option>
+              </select></label
+            >
+          </div>
+          <div class="slider">
+            <label for="brightness">提亮</label
+            ><input
+              id="brightness"
+              type="range"
+              min="70"
+              max="180"
+              step="5"
+              value="100"
+            /><output id="brightnessValue">100%</output>
+          </div>
+          <div class="slider">
+            <label for="saturation">饱和度</label
+            ><input
+              id="saturation"
+              type="range"
+              min="0"
+              max="200"
+              step="5"
+              value="100"
+              aria-valuetext="100%"
+            /><output id="saturationValue" for="saturation">100%</output>
+          </div>
+          <div class="row">
+            <button id="resetSaturation" class="small" disabled>
+              还原饱和度</button
+            ><span class="tip">还原到 100%，保留提亮设置。</span>
+          </div>
+          <p class="tip">
+            100% 保持原色，0%
+            去色。调整后点“看看转图”，确认后再采用；已变成纯白的高光无法靠饱和度恢复，可先降低提亮。
+          </p>
+          <p class="tip">
+            默认用线性光平均取色，减少缩小变暗。LED
+            图片可选“保留亮点”；圆灯间隙仍会让整体偏暗，可调提亮或在“作品”中改为方格。
+          </p>
+          <label class="check"
+            ><input
+              type="checkbox"
+              id="ignoreBlack"
+            />近黑底留空（会去掉画面内的近黑色）</label
+          >
+          <div class="row equal">
+            <button class="primary" id="convert">看看转图</button
+            ><button id="newBlank">从空白画</button>
+          </div>
+          <div class="preview" id="previewBox" hidden>
+            <button
+              id="enlargePreview"
+              class="preview-open"
+              aria-label="放大查看转图预览"
+            >
+              <canvas id="previewCanvas"></canvas><span>点击放大</span>
+            </button>
+            <div class="preview-info">
+              <span id="previewInfo"></span><br /><button
+                id="applyConversion"
+                class="primary"
+              >
+                就用这张
+              </button>
+            </div>
+          </div>
+          <p class="tip">
+            不使用 AI
+            或付费接口。照片与细线缩小会丢细节，增加格数后可逐格修整。新转换先预览；采用后开始新的作品，撤销不会返回上一张。
+          </p>
+        </section>
+        <section class="section" data-panel="colors">
+          <h2>挑一颗喜欢的颜色</h2>
+          <div class="palette" id="palette"></div>
+          <div class="palette-selection">
+            <span id="colorPreview" class="color-preview"></span>
+            <div>
+              <div class="color-status" id="selectedColor"></div>
+              <div id="colorValue" class="mono"></div>
+            </div>
+          </div>
+          <div class="row">
+            <input
+              type="color"
+              id="customColor"
+              value="#b897c8"
+              aria-label="选择新颜色"
+            /><button id="addColor" class="small">添加颜色</button
+            ><span class="tip">最多 64 色</span>
+          </div>
+          <p class="tip">
+            拖动可连续上色，一笔一次撤销。橡皮移除灯点；黑色也能保留为实色。
+          </p>
+          <div class="inspector">
+            <div>
+              <span>格位 · 列 / 行</span
+              ><strong id="inspectCoords">点选或移到画布</strong>
+            </div>
+            <div>
+              <span>当前格颜色</span><strong id="inspectColor">—</strong>
+            </div>
+          </div>
+        </section>
+        <section class="section" data-panel="export">
+          <h2>把小作品收好</h2>
+          <div class="row equal">
+            <button id="mobilePng" class="primary">导出 PNG</button
+            ><button id="mobileJson">保存 JSON</button
+            ><button id="mobileImport">打开 JSON</button>
+          </div>
+          <div class="row equal">
+            <label class="field"
+              >颗粒<select id="shape">
+                <option value="circle">圆豆</option>
+                <option value="square">方格</option>
+              </select></label
+            ><label class="field"
+              >背景<select id="background">
+                <option value="#000000">纯黑</option>
+                <option value="#101016">深紫</option>
+                <option value="#ffffff">白色</option>
+                <option value="transparent">透明</option>
+              </select></label
+            ><label class="field"
+              >像素 / 格<select id="exportCell">
+                <option value="8">8</option>
+                <option value="12" selected>12</option>
+                <option value="16">16</option>
+                <option value="24">24</option>
+              </select></label
+            >
+          </div>
+          <p class="tip">
+            PNG 只导出作品，不含参考图、格线或选框。JSON
+            可恢复颜色与格点，不包含参考图；重新打开后需再选参考图。
+          </p>
+        </section>
+        <details data-panel="export">
+          <summary>使用与隐私</summary>
+          <ul>
+            <!-- RUNTIME_NOTE -->
+            <li>
+              本地导入的图片不上传，不连接模型服务；内置黑猫与骨头示例的素材许可与程序代码许可分开说明；自动暂存在此浏览器，清理浏览器可能丢失，请保存
+              JSON。
+            </li>
+            <li>
+              手机：单指画，双指缩放移动；或选“移动”后单指拖动。参考可选上下或左右对照，可独立单指拖动、双指缩放；底栏“滑页面”让手指在图片上也能滚动页面，点“回编辑”恢复上色和画布缩放。标题不固定。
+            </li>
+            <li>
+              快捷键：B 画笔，E 橡皮，I 取色，H 移动；空格临时拖动画布；Ctrl/⌘ Z
+              撤销，Shift Z 重做。
+            </li>
+            <li>
+              调色板是屏幕颜色，不保证实体品牌豆色匹配。普通转图不会自动理解人物结构或去背景。
+            </li>
+            <li>
+              屏幕方向需要浏览器支持且可能进入全屏；不支持时请使用系统旋转。转换只使用当前取景；不能找回低分辨率丢失的五官。LED
+              亮点采样可能增强细点，也可能让边缘略变粗。
+            </li>
+          </ul>
+        </details>
+        <!-- PWA_PANEL -->
+        <p class="footer-note app-version" data-panel="export">
+          Glintile ·
+          <!-- APP_VERSION -->
+        </p>
+        <p class="footer-note" data-panel="export">
+          先随便玩一会儿。想留住这幅作品，记得保存 JSON。
+        </p>
+      </aside>
+      <nav class="mobile-tabs" aria-label="工具面板">
+        <button data-panel-tab="convert" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 5h18v15H3zM3 16l6-6 4 4 3-3 5 5" />
+            <circle cx="16" cy="8" r="1" /></svg
+          >转图</button
+        ><button data-panel-tab="colors" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="7" cy="7" r="3" />
+            <circle cx="17" cy="7" r="3" />
+            <circle cx="7" cy="17" r="3" />
+            <circle cx="17" cy="17" r="3" /></svg
+          >配色</button
+        ><button data-panel-tab="reference" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 4h8v16H3zM14 4h7v16h-7z" /></svg
+          >参考</button
+        ><button data-panel-tab="export" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16v14H4zM3 3h18v4H3zM9 11h6" /></svg
+          >作品</button
+        ><button
+          id="pageScrollToggle"
+          aria-pressed="false"
+          aria-label="滑页面：在图片上也能上下滚动"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 3v18m-4-4 4 4 4-4M16 21V3m-4 4 4-4 4 4" /></svg
+          ><span id="pageScrollLabel">滑页面</span>
+        </button>
+      </nav>
+    </div>
+    <input
+      hidden
+      id="imageInput"
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+    /><input
+      hidden
+      id="projectInput"
+      type="file"
+      accept=".json,application/json"
+    />
+    <div id="pageModeNotice" class="page-mode-notice" role="status" hidden>
+      页面滑动中 · 不会画点，点“回编辑”继续
+    </div>
+    <div role="status" aria-live="polite" id="toast" class="toast"></div>
+    <dialog id="previewDialog" aria-labelledby="previewTitle">
+      <div class="preview-dialog-head">
+        <h2 id="previewTitle">转图预览</h2>
+        <button id="closePreview" autofocus>关闭</button>
+      </div>
+      <p id="largePreviewInfo" class="tip"></p>
+      <div class="preview-viewport" id="previewViewport">
+        <canvas
+          id="largePreview"
+          tabindex="0"
+          aria-label="转图放大预览，可拖动、双指或滚轮缩放"
+        ></canvas>
+      </div>
+      <div class="preview-controls">
+        <button id="previewZoomOut" aria-label="缩小转图预览">−</button
+        ><button id="previewFit">适合</button
+        ><button id="previewZoomIn" aria-label="放大转图预览">＋</button
+        ><output id="previewZoomLabel">100%</output
+        ><button id="applyLargePreview" class="primary">就用这张</button>
+      </div>
+      <p class="tip">拖动查看细节，双指或滚轮缩放。关闭不会改动作品。</p>
+    </dialog>
+    <dialog id="shareDialog" aria-labelledby="shareTitle">
+      <h2 id="shareTitle">分享点灯匣</h2>
+      <label for="shareUrl">网页链接</label>
+      <input
+        id="shareUrl"
+        type="url"
+        readonly
+        value="https://glintile.game.brothforge.com/"
+      />
+      <p class="tip">长按或选中链接复制，再发给朋友。</p>
+      <button id="closeShare">关闭</button>
+    </dialog>
+    <!-- EXAMPLE_DATA -->
+    <!-- CORE_SCRIPT -->
+    <!-- EDITOR_SCRIPT -->
+    <!-- SITE_FOOTER -->
+    <!-- PWA_SCRIPT -->
+  </body>
+</html>

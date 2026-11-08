@@ -1,0 +1,120 @@
+.pwa-panel p {
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.pwa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pwa-actions button {
+  min-height: 44px;
+  padding: 10px 14px;
+}
+.pwa-panel a {
+  color: #f4c2e3;
+  text-underline-offset: 3px;
+}
+.pwa-panel button:focus-visible,
+.pwa-panel a:focus-visible {
+  outline: 2px solid #fffce4;
+  outline-offset: 3px;
+}
+
+/* Keep the inherited four-item legal footer in its own bottom row. */
+.site-legal {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1280px;
+  height: calc(44px + env(safe-area-inset-bottom));
+  padding: 0 max(12px, env(safe-area-inset-left)) env(safe-area-inset-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  background: #030203;
+  color: #aaa;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.site-legal .legal-item {
+  position: relative;
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.site-legal a:hover {
+  color: #fffce4;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site-legal .legal-item:focus-visible {
+  outline: 1px solid #fffce4;
+  outline-offset: -3px;
+  border-radius: 4px;
+}
+.site-legal .legal-short {
+  display: none;
+}
+.site-legal .legal-tip {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 0;
+  max-width: min(250px, 80vw);
+  padding: 6px 9px;
+  background: #19111d;
+  color: #fffce4;
+  border: 1px solid #75516f;
+  border-radius: 5px;
+  pointer-events: none;
+  opacity: 0;
+  white-space: normal;
+  width: max-content;
+  font-size: 12px;
+}
+.site-legal .legal-item:last-child .legal-tip {
+  left: auto;
+  right: 0;
+}
+.site-legal .legal-item:hover .legal-tip,
+.site-legal .legal-item:focus-visible .legal-tip {
+  opacity: 1;
+}
+.mobile-tabs {
+  bottom: calc(44px + env(safe-area-inset-bottom));
+  height: 60px;
+  padding-bottom: 6px;
+}
+.shell {
+  padding-bottom: calc(116px + env(safe-area-inset-bottom));
+}
+.toast {
+  bottom: calc(110px + env(safe-area-inset-bottom));
+}
+.page-mode-notice {
+  bottom: calc(104px + env(safe-area-inset-bottom));
+}
+html {
+  scroll-padding-bottom: calc(120px + env(safe-area-inset-bottom));
+}
+@media (orientation: portrait) {
+  .site-legal {
+    gap: 8px;
+  }
+  .site-legal .legal-full {
+    display: none;
+  }
+  .site-legal .legal-short {
+    display: inline;
+  }
+}

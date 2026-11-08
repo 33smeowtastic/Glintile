@@ -1,0 +1,22 @@
+{
+  "name": "glintile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-first LED dot art editor",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "node tests/browser.cjs",
+    "check:release": "node scripts/check-release.mjs",
+    "check:version": "node scripts/check-version.mjs origin/main"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "prettier": "3.6.2"
+  }
+}
