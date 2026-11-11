@@ -78,18 +78,19 @@ module.exports = async function protectedDraftCoverage(browser, url, check) {
         () => window.beadPlayground?.getDiagnostics().referenceLoaded,
       );
       assert.equal(await readRaw(), raw);
-      page.once("dialog", (dialog) => dialog.dismiss());
       await page.locator("#discard").click();
+      assert.equal(
+        await page.evaluate(() => document.activeElement.id),
+        "cancelStorageConfirm",
+      );
+      await page.keyboard.press("Escape");
       assert.equal(await readRaw(), raw);
-      const dialog = page.waitForEvent("dialog");
-      await page
-        .locator("#projectInput")
-        .setInputFiles({
-          name: "synthetic.json",
-          mimeType: "application/json",
-          buffer: Buffer.from(legacy),
-        });
-      await (await dialog).dismiss();
+      await page.locator("#projectInput").setInputFiles({
+        name: "synthetic.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(legacy),
+      });
+      await page.locator("#cancelStorageConfirm").click();
       await page.waitForTimeout(650);
       assert.equal(
         await readRaw(),
@@ -97,8 +98,27 @@ module.exports = async function protectedDraftCoverage(browser, url, check) {
         name + ": cancelled import preserves original storage",
       );
       assert(await page.locator("#restoreNotice").isVisible());
-      page.once("dialog", (dialog) => dialog.accept());
+      if (name === "future") {
+        await page.locator("#discard").click();
+        await page.evaluate(
+          ({ scoped, legacy }) => localStorage.setItem(scoped, legacy),
+          { scoped, legacy },
+        );
+        await page.locator("#acceptStorageConfirm").click();
+        await page.getByText(/本次未替换/).waitFor();
+        assert.equal(
+          await readRaw(),
+          legacy,
+          "a stale confirmation must preserve a newer draft",
+        );
+        assert(await page.locator("#restoreNotice").isVisible());
+        await page.evaluate(
+          ({ scoped, raw }) => localStorage.setItem(scoped, raw),
+          { scoped, raw },
+        );
+      }
       await page.locator("#discard").click();
+      await page.locator("#acceptStorageConfirm").click();
       assert.equal(await page.locator("#restoreNotice").isVisible(), false);
       const saved = await page.evaluate(
         (k) => JSON.parse(localStorage.getItem(k)),
@@ -155,5 +175,47 @@ module.exports = async function protectedDraftCoverage(browser, url, check) {
     check("Unreadable storage cannot be overwritten by export or later writes");
   } finally {
     await context.close();
+  }
+
+  const quotaContext = await browser.newContext();
+  try {
+    await quotaContext.addInitScript(
+      ({ scoped, legacyKey, legacy }) => {
+        localStorage.setItem(legacyKey, legacy);
+        const write = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) {
+          if (this === localStorage && key === scoped)
+            throw new DOMException(
+              "Synthetic storage limit",
+              "QuotaExceededError",
+            );
+          return write.call(this, key, value);
+        };
+      },
+      { scoped, legacyKey, legacy },
+    );
+    const page = await quotaContext.newPage();
+    await page.goto(url);
+    await page.locator("#restore").click();
+    assert.deepEqual(
+      await page.evaluate(() => beadPlayground.getProject()),
+      JSON.parse(legacy),
+    );
+    await page.waitForFunction(() =>
+      document.querySelector("#saveStatus").textContent.includes("暂存不可用"),
+    );
+    assert.equal(
+      await page.evaluate((key) => localStorage.getItem(key), legacyKey),
+      legacy,
+    );
+    assert.equal(
+      await page.evaluate((key) => localStorage.getItem(key), scoped),
+      null,
+    );
+    check(
+      "Readable legacy draft opens even when the browser rejects autosave writes",
+    );
+  } finally {
+    await quotaContext.close();
   }
 };

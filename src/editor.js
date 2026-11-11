@@ -12,6 +12,10 @@
   const EXAMPLES = JSON.parse($("example-data")?.textContent || "[]");
   const STORAGE = "glintile:project:" + new URL(".", location.href).pathname,
     LEGACY_STORAGE = "bead-playground-v1",
+    LIBRARY_PREFIX =
+      "glintile:works:v1:" + new URL(".", location.href).pathname + ":",
+    LIBRARY_SIZE = 12,
+    PROJECT_DATA_LIMIT = 4 * 1024 * 1024,
     HISTORY = 100,
     MOBILE = true;
   let project = EXAMPLES.find((e) => e.id === "cat")
@@ -39,6 +43,8 @@
     imageSerial = 0,
     cache = null,
     pendingStoredRaw = null,
+    draftRecord = null,
+    replacingProject = false,
     storageReadBlocked = false,
     storageOK = true,
     dirty = false,
@@ -67,26 +73,59 @@
   function count() {
     return project.cells.reduce((n, v) => n + (v >= 0), 0);
   }
+  function readDraft() {
+    const scoped = localStorage.getItem(STORAGE);
+    return { scoped, raw: scoped ?? localStorage.getItem(LEGACY_STORAGE) };
+  }
+  function draftIsCurrent() {
+    const current = readDraft();
+    return (
+      current.scoped === draftRecord.scoped && current.raw === draftRecord.raw
+    );
+  }
+  function canRestoreDraft() {
+    try {
+      return draftIsCurrent();
+    } catch {
+      return false;
+    }
+  }
+  function writeDraft(value) {
+    if (storageReadBlocked) {
+      $("saveStatus").textContent = "无法读取本机暂存 · 当前作品请保存 JSON";
+      return false;
+    }
+    try {
+      if (!draftIsCurrent()) {
+        $("saveStatus").textContent =
+          "本机暂存已在其他页面变化 · 当前作品请另存";
+        return false;
+      }
+      const raw = JSON.stringify(value);
+      localStorage.setItem(STORAGE, raw);
+      draftRecord = { scoped: raw, raw };
+      storageOK = true;
+      $("saveStatus").textContent = "已本机暂存 · 建议保存 JSON";
+      return true;
+    } catch {
+      storageOK = false;
+      $("saveStatus").textContent = "暂存不可用 · 请保存 JSON";
+      return false;
+    }
+  }
   function saveLocal() {
     clearTimeout(saveTimer);
     saveTimer = 0;
-    if (storageReadBlocked) {
-      $("saveStatus").textContent = "无法读取本机暂存 · 当前作品请保存 JSON";
-      return;
-    }
     if (pendingStoredRaw !== null) {
       $("saveStatus").textContent = "上次暂存已保留 · 当前改动请保存 JSON";
       return;
     }
-    try {
-      localStorage.setItem(STORAGE, JSON.stringify(project));
-      storageOK = true;
-      dirty = false;
-      $("saveStatus").textContent = "已本机暂存 · 建议保存 JSON";
-    } catch (e) {
-      storageOK = false;
-      $("saveStatus").textContent = "暂存不可用 · 请保存 JSON";
-    }
+    if (writeDraft(project)) dirty = false;
+  }
+  function clearPendingDraft() {
+    cache = null;
+    pendingStoredRaw = null;
+    $("restoreNotice").hidden = true;
   }
   function scheduleSave() {
     dirty = true;
@@ -119,41 +158,70 @@
     hover = null;
     $("loupe").style.display = "none";
   }
-  function replace(next, description, options = {}) {
+  async function replace(next, description, options = {}) {
+    if (replacingProject || pendingConfirmation) return false;
     const valid = C.validateProject(next);
     finishStroke();
-    const unsaved = hasUnsavedEdits(),
-      pendingCache =
-        pendingStoredRaw !== null &&
-        (!cache || JSON.stringify(cache) !== JSON.stringify(valid));
-    if (
-      (unsaved || pendingCache) &&
-      !window.confirm(
-        (options.action || "切换作品") +
-          "？" +
-          (unsaved ? "当前作品有尚未保存为 JSON 的改动。" : "") +
-          (pendingCache ? "还有上次未恢复的暂存；继续会替换该暂存。" : "") +
-          "取消后可先保存 JSON；继续后撤销不会回到上一张图。",
+    const before = JSON.stringify(project),
+      unsaved = hasUnsavedEdits(),
+      pendingCache = pendingStoredRaw !== null && !options.restoreDraft;
+    replacingProject = true;
+    try {
+      if (
+        (unsaved || pendingCache || options.alwaysConfirm) &&
+        !(await confirmStorageAction({
+          title: (options.action || "切换作品") + "？",
+          message: [
+            unsaved ? "当前画布有尚未保存的改动。" : "此操作将替换当前画布。",
+            pendingCache
+              ? "继续也会替换上次未恢复的暂存。可先点“备份 JSON”保留原始记录。"
+              : "",
+            "切换后无法通过撤销回到上一幅作品。",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          accept: options.accept || "继续切换",
+          trigger: options.trigger,
+        }))
       )
-    )
-      return false;
-    clearPointerGestures();
-    importSerial++;
-    cache = null;
-    pendingStoredRaw = null;
-    $("restoreNotice").hidden = true;
-    project = valid;
-    history = [];
-    future = [];
-    savedFingerprint = options.unsaved ? null : JSON.stringify(project);
-    selected = Math.max(0, Math.min(selected, project.palette.length - 1));
-    syncControls();
-    rebuild();
-    fit();
-    drawReference();
-    scheduleSave();
-    if (description) notify(description);
-    return true;
+        return false;
+      if (before !== JSON.stringify(project)) {
+        showProjectFeedback("当前画布已变化，请重新操作。", true);
+        return false;
+      }
+      options.checkSource?.();
+      if (pendingStoredRaw !== null) {
+        const ready = options.restoreDraft
+          ? canRestoreDraft()
+          : writeDraft(valid);
+        if (!ready) {
+          showProjectFeedback(
+            options.restoreDraft
+              ? "上次暂存已变化或无法读取，请重新打开页面检查。"
+              : "无法更新上次暂存。请先备份当前画布与上次暂存，再重新打开页面检查。",
+            true,
+          );
+          return false;
+        }
+      }
+      clearPointerGestures();
+      importSerial++;
+      clearPendingDraft();
+      project = valid;
+      history = [];
+      future = [];
+      savedFingerprint = options.unsaved ? null : JSON.stringify(project);
+      selected = Math.max(0, Math.min(selected, project.palette.length - 1));
+      syncControls();
+      rebuild();
+      fit();
+      drawReference();
+      scheduleSave();
+      if (description) notify(description);
+      return true;
+    } finally {
+      replacingProject = false;
+    }
   }
   function setPageScroll(enabled) {
     finishStroke();
@@ -1099,16 +1167,21 @@
       notify(e.message, true);
     }
   };
-  $("applyConversion").onclick = () => {
+  $("applyConversion").onclick = async (event) => {
     if (candidate) {
       const p = candidate;
-      replace(p, "已采用转换，已开始本作品的独立撤销记录。", {
-        action: "采用转图作为新作品",
-        unsaved: true,
-      });
+      if (
+        (await replace(p, "已采用转换，已开始本作品的独立撤销记录。", {
+          action: "采用转图作为新作品",
+          unsaved: true,
+          trigger: event.currentTarget,
+        })) &&
+        previewDialog.open
+      )
+        previewDialog.close();
     }
   };
-  $("newBlank").onclick = () => {
+  $("newBlank").onclick = async (event) => {
     try {
       const { w, h } = dimensions();
       const p = C.blank(w, h);
@@ -1118,9 +1191,10 @@
         exportCell: Number($("exportCell").value),
       };
       if (
-        !replace(p, "已新建空白作品，撤销记录已清空。", {
+        !(await replace(p, "已新建空白作品，撤销记录已清空。", {
           action: "新建空白作品",
-        })
+          trigger: event.currentTarget,
+        }))
       )
         return;
       $("viewMode").value = "free";
@@ -1293,21 +1367,31 @@
   };
   $("mobilePng").onclick = () => $("exportPng").click();
   $("mobileJson").onclick = () => $("exportJson").click();
-  $("mobileImport").onclick = () => $("importProject").click();
-  $("importProject").onclick = () => $("projectInput").click();
+  let importTrigger = null;
+  $("mobileImport").onclick = $("importProject").onclick = (event) => {
+    importTrigger = event.currentTarget;
+    $("projectInput").click();
+  };
   $("projectInput").onchange = async (e) => {
     const f = e.target.files[0],
-      serial = ++importSerial;
+      serial = ++importSerial,
+      trigger = importTrigger ?? document.activeElement;
+    importTrigger = null;
     e.target.value = "";
     if (!f) return;
     try {
-      assert(f.size <= 4 * 1024 * 1024, "JSON 不能超过 4 MB。");
+      assert(f.size <= PROJECT_DATA_LIMIT, "JSON 不能超过 4 MiB。");
       const text = await f.text();
       if (serial !== importSerial) return;
-      replace(
-        C.validateProject(JSON.parse(text)),
+      await replace(
+        JSON.parse(text),
         "作品已打开，撤销记录从这张图重新开始。",
-        { action: "打开导入的 JSON 作品" },
+        {
+          action: "打开导入的 JSON 作品",
+          trigger,
+          checkSource: () =>
+            assert(serial === importSerial, "已选择其他文件，请重新打开作品。"),
+        },
       );
     } catch (err) {
       if (serial === importSerial)
@@ -1316,6 +1400,492 @@
             (err instanceof SyntaxError ? "JSON 语法错误。" : err.message),
           true,
         );
+    }
+  };
+  const confirmationDialog = $("storageConfirmDialog");
+  let pendingConfirmation = null;
+  function confirmStorageAction({
+    title,
+    message,
+    accept,
+    trigger = document.activeElement,
+  }) {
+    if (pendingConfirmation || confirmationDialog.open)
+      return Promise.resolve(false);
+    $("storageConfirmTitle").textContent = title;
+    $("storageConfirmMessage").textContent = message;
+    $("acceptStorageConfirm").textContent = accept;
+    confirmationDialog.showModal();
+    $("cancelStorageConfirm").focus({ preventScroll: true });
+    return new Promise((resolve) => {
+      pendingConfirmation = { resolve, trigger };
+    });
+  }
+  function finishConfirmation(accepted) {
+    if (!pendingConfirmation) return;
+    const { resolve, trigger } = pendingConfirmation;
+    pendingConfirmation = null;
+    if (confirmationDialog.open) confirmationDialog.close();
+    trigger?.focus({ preventScroll: true });
+    resolve(accepted);
+  }
+  $("cancelStorageConfirm").onclick = () => finishConfirmation(false);
+  $("acceptStorageConfirm").onclick = () => finishConfirmation(true);
+  confirmationDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    finishConfirmation(false);
+  });
+  confirmationDialog.addEventListener("close", () => {
+    if (!confirmationDialog.open) finishConfirmation(false);
+  });
+
+  const savedDialog = $("savedDialog"),
+    savedList = $("savedList"),
+    nameDialog = $("nameWorkDialog"),
+    workName = $("workName"),
+    dataDialog = $("projectDataDialog"),
+    dataText = $("projectDataText");
+  let libraryBusy = false,
+    nameAction = null,
+    dataGeneration = 0,
+    applyingProjectData = false;
+  function setFeedback(node, message, error = false) {
+    node.textContent = message;
+    node.classList.toggle("project-error", error);
+    node.hidden = !message;
+  }
+  function showProjectFeedback(message, error) {
+    if (dataDialog.open) setFeedback($("projectDataFeedback"), message, error);
+    else if (savedDialog.open) setFeedback($("savedFeedback"), message, error);
+    else notify(message, error);
+  }
+  function projectDataFromText(text) {
+    assert(
+      text.length <= PROJECT_DATA_LIMIT &&
+        new TextEncoder().encode(text).length <= PROJECT_DATA_LIMIT,
+      "项目数据不能超过 4 MiB。",
+    );
+    assert(text.trim(), "请先粘贴完整的项目 JSON。");
+    let raw;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      throw Error("JSON 不完整或语法有误。");
+    }
+    return C.validateProject(raw);
+  }
+  function readWork(slot) {
+    const raw = localStorage.getItem(LIBRARY_PREFIX + slot);
+    if (raw === null) return { slot, raw };
+    try {
+      const record = JSON.parse(raw);
+      assert(
+        record.schema === 1 &&
+          typeof record.name === "string" &&
+          typeof record.data === "string",
+        "无法识别这条存档。",
+      );
+      return { slot, raw, record, project: projectDataFromText(record.data) };
+    } catch {
+      return { slot, raw };
+    }
+  }
+  function assertWorkUnchanged(work) {
+    assert(
+      localStorage.getItem(LIBRARY_PREFIX + work.slot) === work.raw,
+      "这条存档已在其他页面变化。本次操作已取消，请重新选择。",
+    );
+  }
+  function writeWork(work, record) {
+    const update = () => {
+      assertWorkUnchanged(work);
+      const key = LIBRARY_PREFIX + work.slot;
+      if (record === null) localStorage.removeItem(key);
+      else
+        localStorage.setItem(
+          key,
+          JSON.stringify({
+            ...record,
+            revision: Array.from(
+              crypto.getRandomValues(new Uint32Array(4)),
+            ).join("-"),
+          }),
+        );
+    };
+    // Hold a lock only for the compare and write, never while awaiting confirmation.
+    return navigator.locks
+      ? navigator.locks.request(LIBRARY_PREFIX, update)
+      : update();
+  }
+  function workTitle(work) {
+    return work.record?.name ?? "存档 " + (work.slot + 1);
+  }
+  function currentProjectData() {
+    finishStroke();
+    setSettings();
+    return JSON.stringify(project);
+  }
+  function formatSavedTime(value) {
+    if (typeof value !== "string") return "保存时间未知";
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "保存时间未知";
+    const two = (number) => String(number).padStart(2, "0");
+    return (
+      "保存于 " +
+      date.getFullYear() +
+      "-" +
+      two(date.getMonth() + 1) +
+      "-" +
+      two(date.getDate()) +
+      " " +
+      two(date.getHours()) +
+      ":" +
+      two(date.getMinutes())
+    );
+  }
+  function refreshLibrary(focus) {
+    try {
+      const works = Array.from({ length: LIBRARY_SIZE }, (_, slot) =>
+        readWork(slot),
+      );
+      savedList.replaceChildren();
+      $("saveNewWork").disabled = works.every((work) => work.raw !== null);
+      for (const work of works) {
+        if (work.raw === null) continue;
+        const row =
+          $("savedWorkTemplate").content.firstElementChild.cloneNode(true);
+        const name = workTitle(work);
+        row.querySelector(".saved-title").textContent = name;
+        row.querySelector(".saved-size").textContent = work.project
+          ? work.project.width + " × " + work.project.height + " 格"
+          : "暂不能打开";
+        row.querySelector(".saved-date").textContent = formatSavedTime(
+          work.record?.savedAt,
+        );
+        const bind = (action, label, callback, enabled = true) => {
+          const button = row.querySelector('[data-action="' + action + '"]');
+          button.dataset.slot = work.slot;
+          button.setAttribute("aria-label", label);
+          button.title = label;
+          button.disabled = !enabled;
+          button.onclick = () => {
+            if (!libraryBusy && !pendingConfirmation) callback(button);
+          };
+        };
+        const quoted = "“" + name + "”";
+        bind(
+          "rename",
+          "重命名" + quoted,
+          (trigger) => openWorkName(work, trigger),
+          !!work.record,
+        );
+        bind(
+          "open",
+          work.project ? "继续编辑" + quoted : "当前版本无法打开" + quoted,
+          (trigger) => openWork(work, trigger),
+          !!work.project,
+        );
+        bind(
+          "copy",
+          "复制" + quoted + (work.project ? "的项目数据" : "的原始数据"),
+          (trigger) =>
+            openProjectData("copy", work.record?.data ?? work.raw, trigger),
+        );
+        bind("remove", "删除" + quoted, (trigger) =>
+          changeWork(work, trigger, true),
+        );
+        bind("overwrite", "用当前画布覆盖存档" + quoted, (trigger) =>
+          changeWork(work, trigger, false),
+        );
+        savedList.append(row);
+      }
+      if (focus) {
+        const next = savedList.querySelector(focus) || $("closeSaved");
+        next.focus({ preventScroll: true });
+      }
+      return works;
+    } catch {
+      savedList.replaceChildren();
+      $("saveNewWork").disabled = true;
+      showProjectFeedback(
+        "无法读取本机作品库。可用 JSON 文件或复制数据备份当前画布。",
+        true,
+      );
+      return null;
+    }
+  }
+  function libraryHint(works) {
+    if (works)
+      showProjectFeedback(
+        $("saveNewWork").disabled
+          ? "作品库已满。可覆盖一条现有存档。"
+          : works.every((work) => work.raw === null)
+            ? "作品库还没有存档。"
+            : "",
+      );
+  }
+  $("openSaved").onclick = () => {
+    if (savedDialog.open) return;
+    savedDialog.showModal();
+    libraryHint(refreshLibrary());
+  };
+  $("closeSaved").onclick = () => savedDialog.close();
+  savedDialog.addEventListener("close", () => {
+    if (!savedDialog.open) $("openSaved").focus({ preventScroll: true });
+  });
+  function openWorkName(work, trigger) {
+    if (libraryBusy || pendingConfirmation || nameDialog.open) return;
+    nameAction = {
+      work,
+      trigger,
+      data: work.record?.data ?? currentProjectData(),
+    };
+    $("nameWorkTitle").textContent = work.record ? "重命名作品" : "保存新作品";
+    workName.value = work.record?.name ?? "作品 " + (work.slot + 1);
+    $("workNameHelp").textContent = work.record
+      ? "1–30 个字符。改名会保留作品内容和保存时间。"
+      : "1–30 个字符。";
+    $("saveWorkName").textContent = work.record ? "保存名称" : "保存作品";
+    updateWorkNameCount();
+    setFeedback($("workNameError"), "");
+    nameDialog.showModal();
+    workName.select();
+  }
+  $("saveNewWork").onclick = (event) => {
+    if (libraryBusy) return;
+    const works = refreshLibrary();
+    const available = works?.find((work) => work.raw === null);
+    if (available) openWorkName(available, event.currentTarget);
+    else libraryHint(works);
+  };
+  function updateWorkNameCount() {
+    $("workNameCount").textContent =
+      [...workName.value.trim()].length + " / 30";
+  }
+  workName.addEventListener("input", () => {
+    updateWorkNameCount();
+    setFeedback($("workNameError"), "");
+  });
+  $("cancelWorkName").onclick = () => {
+    if (!libraryBusy) nameDialog.close();
+  };
+  nameDialog.addEventListener("cancel", (event) => {
+    if (libraryBusy) event.preventDefault();
+  });
+  nameDialog.addEventListener("close", () => {
+    if (nameDialog.open) return;
+    const trigger = nameAction?.trigger;
+    nameAction = null;
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    else if (trigger?.dataset.slot) {
+      const updatedTrigger = savedList.querySelector(
+        '[data-action="rename"][data-slot="' + trigger.dataset.slot + '"]',
+      );
+      (updatedTrigger ?? $("closeSaved")).focus({ preventScroll: true });
+    }
+  });
+  $("nameWorkForm").onsubmit = async (event) => {
+    event.preventDefault();
+    if (!nameAction || libraryBusy) return;
+    const { work, data } = nameAction;
+    const name = workName.value.trim();
+    if (
+      !name ||
+      [...name].length > 30 ||
+      /[\u0000-\u001f\u007f]/.test(name) ||
+      !/[^\s\u200b-\u200d\ufeff]/.test(name)
+    ) {
+      setFeedback($("workNameError"), "请输入 1–30 个可见字符。", true);
+      return;
+    }
+    libraryBusy = true;
+    try {
+      await writeWork(work, {
+        schema: 1,
+        name,
+        data,
+        savedAt: work.record?.savedAt ?? new Date().toISOString(),
+      });
+      if (!work.record) {
+        savedFingerprint = data;
+        saveLocal();
+      }
+      nameDialog.close();
+      refreshLibrary('[data-action="rename"][data-slot="' + work.slot + '"]');
+      showProjectFeedback(
+        work.record ? "已更新作品名称。" : "已保存“" + name + "”。",
+      );
+    } catch (error) {
+      refreshLibrary();
+      setFeedback($("workNameError"), workError(error), true);
+    } finally {
+      libraryBusy = false;
+    }
+  };
+  function workError(error) {
+    return error instanceof DOMException
+      ? "无法写入本机作品库，请检查浏览器权限或剩余空间。"
+      : error.message;
+  }
+  async function openWork(work, trigger) {
+    libraryBusy = true;
+    try {
+      if (
+        await replace(work.project, "已打开“" + workTitle(work) + "”。", {
+          action: "继续编辑“" + workTitle(work) + "”",
+          trigger,
+          checkSource: () => assertWorkUnchanged(work),
+        })
+      )
+        savedDialog.close();
+    } catch (error) {
+      refreshLibrary('[data-action="open"][data-slot="' + work.slot + '"]');
+      showProjectFeedback(workError(error), true);
+    } finally {
+      libraryBusy = false;
+    }
+  }
+  async function changeWork(work, trigger, removing) {
+    libraryBusy = true;
+    const data = removing ? null : currentProjectData();
+    const name = workTitle(work);
+    const focus =
+      '[data-action="' +
+      trigger.dataset.action +
+      '"][data-slot="' +
+      work.slot +
+      '"]';
+    try {
+      if (
+        !(await confirmStorageAction({
+          title: removing ? "删除这条存档？" : "覆盖这条存档？",
+          message: removing
+            ? "“" + name + "”将从作品库删除，无法撤销。当前画布会保留。"
+            : "将用本次的画布快照覆盖“" +
+              name +
+              "”。原存档无法恢复，可先复制备份。",
+          accept: removing ? "删除存档" : "覆盖存档",
+          trigger,
+        }))
+      )
+        return;
+      await writeWork(
+        work,
+        removing
+          ? null
+          : {
+              schema: 1,
+              name,
+              data,
+              savedAt: new Date().toISOString(),
+            },
+      );
+      if (removing && savedFingerprint === work.record?.data)
+        savedFingerprint = null;
+      if (!removing) {
+        savedFingerprint = data;
+        saveLocal();
+      }
+      refreshLibrary(focus);
+      showProjectFeedback((removing ? "已删除“" : "已覆盖“") + name + "”。");
+    } catch (error) {
+      refreshLibrary(focus);
+      showProjectFeedback(workError(error), true);
+    } finally {
+      libraryBusy = false;
+    }
+  }
+  function openProjectData(mode, text, trigger) {
+    if (dataDialog.open) return;
+    const copying = mode === "copy";
+    dataGeneration++;
+    dataText.value = text;
+    dataText.readOnly = copying;
+    $("projectDataTitle").textContent = copying
+      ? "复制项目数据"
+      : "粘贴项目数据";
+    $("closeProjectData").textContent = savedDialog.open
+      ? "返回我的作品"
+      : "关闭";
+    $("projectDataHelp").textContent = copying
+      ? "复制完整 JSON，可在另一台设备粘贴打开。"
+      : "粘贴完整 JSON，确认后打开到画布。作品库里的存档会保留。";
+    $("copyProjectData").hidden = !copying;
+    $("selectProjectData").hidden = !copying;
+    $("copyProjectData").disabled = false;
+    $("applyProjectData").hidden = copying;
+    setFeedback($("projectDataFeedback"), "");
+    dataDialog.showModal();
+    (copying ? $("copyProjectData") : dataText).focus({ preventScroll: true });
+    dataDialog.addEventListener(
+      "close",
+      () => {
+        if (dataDialog.open) return;
+        dataGeneration++;
+        dataText.value = "";
+        trigger.focus({ preventScroll: true });
+      },
+      { once: true },
+    );
+  }
+  $("copyCurrentData").onclick = (event) =>
+    openProjectData("copy", currentProjectData(), event.currentTarget);
+  $("pasteFromLibrary").onclick = $("restoreProjectData").onclick = (event) =>
+    openProjectData("paste", "", event.currentTarget);
+  $("closeProjectData").onclick = () => dataDialog.close();
+  function selectProjectData() {
+    dataText.focus();
+    dataText.select();
+  }
+  $("selectProjectData").onclick = selectProjectData;
+  $("copyProjectData").onclick = async (event) => {
+    const generation = dataGeneration,
+      button = event.currentTarget;
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      await navigator.clipboard.writeText(dataText.value);
+      if (generation === dataGeneration && dataDialog.open)
+        setFeedback($("projectDataFeedback"), "已复制项目数据。");
+    } catch {
+      if (generation === dataGeneration && dataDialog.open) {
+        selectProjectData();
+        setFeedback(
+          $("projectDataFeedback"),
+          "文本已选中，可使用系统的复制操作。",
+        );
+      }
+    } finally {
+      if (generation === dataGeneration && dataDialog.open) {
+        button.disabled = false;
+        if (document.activeElement === document.body)
+          button.focus({ preventScroll: true });
+      }
+    }
+  };
+  dataText.addEventListener("input", () =>
+    setFeedback($("projectDataFeedback"), ""),
+  );
+  $("applyProjectData").onclick = async (event) => {
+    if (applyingProjectData) return;
+    applyingProjectData = true;
+    try {
+      const next = projectDataFromText(dataText.value);
+      if (
+        await replace(next, "已从项目数据打开作品。", {
+          action: "用粘贴的项目替换画布",
+          accept: "替换画布",
+          alwaysConfirm: true,
+          trigger: event.currentTarget,
+        })
+      ) {
+        dataDialog.close();
+        if (savedDialog.open) savedDialog.close();
+      }
+    } catch (error) {
+      showProjectFeedback("未打开项目。 " + error.message, true);
+    } finally {
+      applyingProjectData = false;
     }
   };
   $("addColor").onclick = () => {
@@ -1467,7 +2037,7 @@
   $("previewZoomIn").onclick = () => zoomPreview(previewView.scale * 1.35);
   $("previewZoomOut").onclick = () => zoomPreview(previewView.scale / 1.35);
   $("previewFit").onclick = fitPreview;
-  $("applyLargePreview").onclick = () => $("applyConversion").click();
+  $("applyLargePreview").onclick = $("applyConversion").onclick;
   previewDialog.addEventListener("close", () => {
     previewPointers.clear();
     previewGesture = null;
@@ -1624,7 +2194,11 @@
   });
 
   window.addEventListener("keydown", (e) => {
-    if (previewDialog.open || e.target.matches("input,select,textarea")) return;
+    if (
+      document.querySelector("dialog[open]") ||
+      e.target.matches("input,select,textarea")
+    )
+      return;
     const k = e.key.toLowerCase(),
       mod = e.ctrlKey || e.metaKey;
     if (mod && k === "z") {
@@ -1643,7 +2217,11 @@
       return;
     }
     if (mod) return;
-    if (e.code === "Space" && !pageScroll) {
+    if (
+      e.code === "Space" &&
+      !pageScroll &&
+      !e.target.closest("button,a,summary")
+    ) {
       e.preventDefault();
       space = true;
       canvas.dataset.tool = "pan";
@@ -1680,9 +2258,8 @@
     if (document.visibilityState === "hidden") flushLocal();
   });
   try {
-    const scoped = localStorage.getItem(STORAGE);
-    pendingStoredRaw =
-      scoped === null ? localStorage.getItem(LEGACY_STORAGE) : scoped;
+    draftRecord = readDraft();
+    pendingStoredRaw = draftRecord.raw;
     if (pendingStoredRaw !== null) {
       $("restoreNotice").hidden = false;
       try {
@@ -1700,30 +2277,38 @@
     storageReadBlocked = true;
     $("saveStatus").textContent = "无法读取本机暂存 · 当前作品请保存 JSON";
   }
-  $("restore").onclick = () => {
+  $("restore").onclick = async (event) => {
     if (
       cache &&
-      replace(cache, "已恢复本机暂存，建议保存 JSON。", {
+      (await replace(cache, "已恢复本机暂存，建议保存 JSON。", {
         action: "恢复暂存作品",
+        trigger: event.currentTarget,
+        restoreDraft: true,
         unsaved: true,
-      })
-    ) {
-      cache = null;
-      $("restoreNotice").hidden = true;
-    }
+      }))
+    )
+      $("headerExport").focus({ preventScroll: true });
   };
-  $("discard").onclick = () => {
-    if (storageReadBlocked) return;
+  $("discard").onclick = async (event) => {
+    if (storageReadBlocked || pendingStoredRaw === null || replacingProject)
+      return;
+    const before = JSON.stringify(project);
     if (
-      !window.confirm(
-        "用当前作品替换上次暂存？请先点“备份 JSON”保存原始记录；取消会保留上次暂存。",
-      )
+      !(await confirmStorageAction({
+        title: "替换上次暂存？",
+        message: "将用当前画布替换上次暂存。可先点“备份 JSON”保留原始记录。",
+        accept: "替换暂存",
+        trigger: event.currentTarget,
+      }))
     )
       return;
-    cache = null;
-    pendingStoredRaw = null;
-    $("restoreNotice").hidden = true;
-    saveLocal();
+    if (before !== JSON.stringify(project) || !writeDraft(project)) {
+      notify("当前画布或本机暂存已变化，或暂存不可用。本次未替换。", true);
+      return;
+    }
+    clearPendingDraft();
+    dirty = false;
+    $("headerExport").focus({ preventScroll: true });
   };
   $("exportPrevious").onclick = () => {
     if (pendingStoredRaw !== null) {
@@ -1790,13 +2375,13 @@
     };
     im.src = example.referenceDataUrl;
   }
-  function loadExample(example) {
+  async function loadExample(example, trigger) {
     if (
-      !replace(
+      !(await replace(
         example.project,
         "已打开" + example.name + "，撤销仅针对当前作品。",
-        { action: "打开" + example.name + "示例" },
-      )
+        { action: "打开" + example.name + "示例", trigger },
+      ))
     )
       return;
     setExampleReference(example);
@@ -1824,7 +2409,7 @@
         " 色";
       t.append(name, desc);
       b.append(img, t);
-      b.onclick = () => loadExample(example);
+      b.onclick = () => loadExample(example, b);
       $("examples").append(b);
     });
 
