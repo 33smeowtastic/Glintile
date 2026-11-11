@@ -73,9 +73,8 @@ module.exports = async function shareCoverage(browser, url, check) {
       await page.locator("#shareDialog").evaluate((d) => d.open),
       false,
     );
-    assert.equal(
-      await page.evaluate(() => document.activeElement.id),
-      "headerShare",
+    await page.waitForFunction(
+      () => document.activeElement.id === "headerShare",
     );
     await page.evaluate(() => {
       Object.defineProperty(navigator, "share", { value: undefined });
