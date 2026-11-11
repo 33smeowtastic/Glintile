@@ -463,6 +463,11 @@
         </section>
         <section class="section" data-panel="export">
           <h2>把小作品收好</h2>
+          <button id="openSaved" class="wide">打开作品库</button>
+          <div class="row equal">
+            <button id="copyCurrentData">复制项目数据</button>
+            <button id="restoreProjectData">粘贴项目数据</button>
+          </div>
           <div class="row equal">
             <button id="mobilePng" class="primary">导出 PNG</button
             ><button id="mobileJson">保存 JSON</button
@@ -596,6 +601,132 @@
         ><button id="applyLargePreview" class="primary">就用这张</button>
       </div>
       <p class="tip">拖动查看细节，双指或滚轮缩放。关闭不会改动作品。</p>
+    </dialog>
+    <dialog
+      id="savedDialog"
+      class="project-dialog"
+      aria-labelledby="savedTitle"
+    >
+      <div class="preview-dialog-head">
+        <h2 id="savedTitle">我的作品</h2>
+        <button id="closeSaved" type="button" autofocus>关闭</button>
+      </div>
+      <p class="tip">
+        最多保存 12 幅作品。存档保留在此浏览器，参考图需重新选择。
+      </p>
+      <div class="row equal">
+        <button id="saveNewWork" class="primary" type="button">
+          保存当前画布
+        </button>
+        <button id="pasteFromLibrary" type="button">粘贴到画布</button>
+      </div>
+      <p id="savedActionsHelp" class="tip">
+        点作品名可改名，铅笔图标继续编辑。
+      </p>
+      <p id="savedFeedback" class="tip" role="status" hidden></p>
+      <ul id="savedList" class="saved-list"></ul>
+    </dialog>
+    <template id="savedWorkTemplate">
+      <li class="saved-entry">
+        <div class="saved-entry-heading">
+          <h3 class="saved-title-heading">
+            <button
+              type="button"
+              class="saved-title"
+              data-action="rename"
+              aria-describedby="savedActionsHelp"
+            ></button>
+          </h3>
+          <span class="saved-size"></span>
+        </div>
+        <p class="saved-date"></p>
+        <div class="saved-actions">
+          <button class="saved-icon" type="button" data-action="open">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 16l-1 5 5-1L20 8l-4-4L4 16zM14 6l4 4" />
+            </svg>
+          </button>
+          <button class="saved-icon" type="button" data-action="copy">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M8 8h12v12H8zM16 8V4H4v12h4" />
+            </svg>
+          </button>
+          <button class="saved-icon" type="button" data-action="remove">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 6h18M8 6V3h8v3M5 6l1 15h12l1-15M9 10v7M15 10v7" />
+            </svg>
+          </button>
+          <button type="button" data-action="overwrite">覆盖存档</button>
+        </div>
+      </li>
+    </template>
+    <dialog
+      id="nameWorkDialog"
+      class="project-dialog"
+      aria-labelledby="nameWorkTitle"
+    >
+      <div class="preview-dialog-head">
+        <h2 id="nameWorkTitle"></h2>
+        <button id="cancelWorkName" type="button">取消</button>
+      </div>
+      <form id="nameWorkForm">
+        <label for="workName">作品名称</label>
+        <input
+          id="workName"
+          type="text"
+          maxlength="60"
+          required
+          autocomplete="off"
+          aria-describedby="workNameHelp workNameCount workNameError"
+          autofocus
+        />
+        <p id="workNameHelp" class="tip"></p>
+        <p id="workNameCount" class="tip"></p>
+        <p id="workNameError" class="project-error" role="alert" hidden></p>
+        <button id="saveWorkName" class="wide primary" type="submit"></button>
+      </form>
+    </dialog>
+    <dialog
+      id="projectDataDialog"
+      class="project-dialog"
+      aria-labelledby="projectDataTitle"
+      aria-describedby="projectDataHelp"
+    >
+      <div class="preview-dialog-head">
+        <h2 id="projectDataTitle"></h2>
+        <button id="closeProjectData" type="button">关闭</button>
+      </div>
+      <p id="projectDataHelp" class="tip"></p>
+      <label for="projectDataText">项目 JSON</label>
+      <textarea
+        id="projectDataText"
+        spellcheck="false"
+        autocomplete="off"
+        autocapitalize="off"
+      ></textarea>
+      <p id="projectDataFeedback" class="tip" role="status" hidden></p>
+      <div class="row equal">
+        <button id="selectProjectData" type="button">全选文本</button>
+        <button id="copyProjectData" class="primary" type="button">
+          复制到剪贴板
+        </button>
+        <button id="applyProjectData" class="primary" type="button" hidden>
+          打开到画布
+        </button>
+      </div>
+    </dialog>
+    <dialog
+      id="storageConfirmDialog"
+      class="project-dialog"
+      aria-labelledby="storageConfirmTitle"
+      aria-describedby="storageConfirmMessage"
+    >
+      <h2 id="storageConfirmTitle"></h2>
+      <p id="storageConfirmMessage"></p>
+      <div class="row equal storage-confirm-actions">
+        <button id="cancelStorageConfirm" type="button" autofocus>取消</button>
+        <button id="acceptStorageConfirm" type="button"></button>
+      </div>
     </dialog>
     <dialog id="shareDialog" aria-labelledby="shareTitle">
       <h2 id="shareTitle">分享点灯匣</h2>

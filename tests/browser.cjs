@@ -258,6 +258,7 @@ const check = (name, detail) => {
     await require("./header-notice.cjs")(browser, url, check);
     await require("./share.cjs")(browser, url, check);
     await require("./protected-drafts.cjs")(browser, url, check);
+    await require("./project-library.cjs")(browser, url, check);
     for (const [name, w, h] of [
       ["small", 320, 640],
       ["portrait", 390, 844],
@@ -506,11 +507,11 @@ const check = (name, detail) => {
       ),
       legacy,
     );
-    d.once("dialog", (dialog) => dialog.dismiss());
     await d.locator("#discard").click();
+    await d.keyboard.press("Escape");
     assert(await d.locator("#restoreNotice").isVisible());
-    d.once("dialog", (dialog) => dialog.accept());
     await d.locator("#discard").click();
+    await d.locator("#acceptStorageConfirm").click();
     assert.equal(await d.locator("#restoreNotice").isVisible(), false);
     const current = await d.evaluate(() => beadPlayground.getProject());
     assert.deepEqual(
